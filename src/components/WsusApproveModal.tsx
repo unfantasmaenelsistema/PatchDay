@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useEscapeToClose } from '../utils/useEscapeToClose';
 import {
   AlertOctagon,
   AlertTriangle,
@@ -70,6 +71,7 @@ export const WsusApproveModal: React.FC<WsusApproveModalProps> = ({
     }
   }, [isOpen, currentApproval, bulletin?.id]);
 
+  useEscapeToClose(isOpen, onClose);
   if (!isOpen || !bulletin) return null;
 
   // Approved RFCs from Phase 2 that authorize this specific KB

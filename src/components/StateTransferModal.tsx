@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useEscapeToClose } from '../utils/useEscapeToClose';
 import { Check, Copy, Download, RotateCcw, Upload, X } from 'lucide-react';
 import { LabState } from '../types/patchday';
 import {
@@ -25,6 +26,7 @@ export const StateTransferModal: React.FC<StateTransferModalProps> = ({
   const [importError, setImportError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
+  useEscapeToClose(isOpen, onClose);
   if (!isOpen) return null;
 
   const exportedText =
@@ -209,6 +211,7 @@ export const ResetConfirmModal: React.FC<ResetConfirmModalProps> = ({
   onCancel,
   onConfirm,
 }) => {
+  useEscapeToClose(isOpen, onCancel);
   if (!isOpen) return null;
 
   return (

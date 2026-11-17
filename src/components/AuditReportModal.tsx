@@ -1,4 +1,5 @@
 import React from 'react';
+import { useEscapeToClose } from '../utils/useEscapeToClose';
 import {
   CheckCircle2,
   Download,
@@ -45,6 +46,7 @@ export const AuditReportModal: React.FC<AuditReportModalProps> = ({
   onChangeGroup,
   onClose,
 }) => {
+  useEscapeToClose(isOpen, onClose);
   if (!isOpen) return null;
 
   const aliasDisplay = state.studentAlias.trim() || 'Alumno / Operador SecOps';

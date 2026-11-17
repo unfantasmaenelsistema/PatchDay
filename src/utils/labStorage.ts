@@ -1,10 +1,5 @@
-import {
-  createEmptyWsusPatchApproval,
-  createInitialLabState,
-  createInitialSimulationState,
-  DEPLOYMENT_RINGS,
-  PATCH_BULLETINS,
-} from '../data/initialData';
+import { createInitialLabState, DEPLOYMENT_RINGS, PATCH_BULLETINS } from '../data/initialData';
+import { sanitizeLabState } from './labStateSanitizer';
 import {
   DeploymentRingId,
   EnterpriseAsset,
@@ -12,90 +7,19 @@ import {
   LabState,
   OperationalPriority,
   PatchBulletin,
-  WsusPatchApproval,
 } from '../types/patchday';
 
 const STORAGE_KEY = 'patchday_lab_state_v1';
-
-function mergeWsusApprovals(
-  raw?: Record<string, WsusPatchApproval>,
-): Record<string, WsusPatchApproval> {
-  const base: Record<string, WsusPatchApproval> = {};
-  for (const b of PATCH_BULLETINS) {
-    const existing = raw?.[b.id];
-    base[b.id] = existing
-      ? {
-          declinedGlobally: Boolean(existing.declinedGlobally),
-          rings: {
-            'ring-0': existing.rings?.['ring-0'] ?? { action: 'Not Approved' },
-            'ring-1': existing.rings?.['ring-1'] ?? { action: 'Not Approved' },
-            'ring-2': existing.rings?.['ring-2'] ?? { action: 'Not Approved' },
-            'ring-3': existing.rings?.['ring-3'] ?? { action: 'Not Approved' },
-          },
-        }
-      : createEmptyWsusPatchApproval();
-  }
-  return base;
-}
 
 export function loadLabState(): LabState {
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (!raw) return createInitialLabState();
-    const parsed = JSON.parse(raw) as Partial<LabState>;
+    const parsed = JSON.parse(raw) as { version?: unknown } | null;
     if (!parsed || typeof parsed !== 'object' || parsed.version !== 1) {
       return createInitialLabState();
     }
-    const fallback = createInitialLabState();
-    return {
-      ...fallback,
-      ...parsed,
-      activeMissionId: parsed.activeMissionId ?? fallback.activeMissionId,
-      studentAlias: typeof parsed.studentAlias === 'string' ? parsed.studentAlias : '',
-      studentGroup: typeof parsed.studentGroup === 'string' ? parsed.studentGroup : '',
-      triageDecisions:
-        parsed.triageDecisions && typeof parsed.triageDecisions === 'object'
-          ? parsed.triageDecisions
-          : {},
-      inspectedAssetIds: Array.isArray(parsed.inspectedAssetIds)
-        ? parsed.inspectedAssetIds
-        : [],
-      ringMaintenanceWindows:
-        parsed.ringMaintenanceWindows && typeof parsed.ringMaintenanceWindows === 'object'
-          ? { ...fallback.ringMaintenanceWindows, ...parsed.ringMaintenanceWindows }
-          : fallback.ringMaintenanceWindows,
-      blackoutPeriods: Array.isArray(parsed.blackoutPeriods)
-        ? parsed.blackoutPeriods
-        : fallback.blackoutPeriods,
-      rfcSubmissions: Array.isArray(parsed.rfcSubmissions)
-        ? parsed.rfcSubmissions
-        : [],
-      wsusApprovals: mergeWsusApprovals(parsed.wsusApprovals),
-      wsusAutoApproval:
-        parsed.wsusAutoApproval && typeof parsed.wsusAutoApproval === 'object'
-          ? { ...fallback.wsusAutoApproval, ...parsed.wsusAutoApproval }
-          : fallback.wsusAutoApproval,
-      simulation:
-        parsed.simulation && typeof parsed.simulation === 'object'
-          ? {
-              ...createInitialSimulationState(),
-              ...parsed.simulation,
-              installedPatchesByRing: {
-                ...createInitialSimulationState().installedPatchesByRing,
-                ...(parsed.simulation.installedPatchesByRing ?? {}),
-              },
-              incidents: Array.isArray(parsed.simulation.incidents)
-                ? parsed.simulation.incidents
-                : [],
-              eventLogs: Array.isArray(parsed.simulation.eventLogs)
-                ? parsed.simulation.eventLogs
-                : createInitialSimulationState().eventLogs,
-              terminalHistory: Array.isArray(parsed.simulation.terminalHistory)
-                ? parsed.simulation.terminalHistory
-                : [],
-            }
-          : createInitialSimulationState(),
-    };
+    return sanitizeLabState(parsed);
   } catch {
     return createInitialLabState();
   }
@@ -172,55 +96,9 @@ export function importStateFromInput(rawInput: string): {
       };
     }
 
-    const fallback = createInitialLabState();
-    const validPatchExists = PATCH_BULLETINS.some((b) => b.id === parsed.selectedPatchId);
+    // Cada campo se valida con su forma esperada y los RFC se vuelven a dictaminar con las reglas del CAB
     const hydrated: LabState = {
-      ...fallback,
-      ...parsed,
-      version: 1,
-      activeMissionId: parsed.activeMissionId ?? fallback.activeMissionId,
-      studentAlias: typeof parsed.studentAlias === 'string' ? parsed.studentAlias : '',
-      studentGroup: typeof parsed.studentGroup === 'string' ? parsed.studentGroup : '',
-      selectedPatchId: validPatchExists ? parsed.selectedPatchId : fallback.selectedPatchId,
-      triageDecisions: parsed.triageDecisions ?? {},
-      inspectedAssetIds: Array.isArray(parsed.inspectedAssetIds)
-        ? parsed.inspectedAssetIds
-        : [],
-      ringMaintenanceWindows:
-        parsed.ringMaintenanceWindows && typeof parsed.ringMaintenanceWindows === 'object'
-          ? { ...fallback.ringMaintenanceWindows, ...parsed.ringMaintenanceWindows }
-          : fallback.ringMaintenanceWindows,
-      blackoutPeriods: Array.isArray(parsed.blackoutPeriods)
-        ? parsed.blackoutPeriods
-        : fallback.blackoutPeriods,
-      rfcSubmissions: Array.isArray(parsed.rfcSubmissions)
-        ? parsed.rfcSubmissions
-        : [],
-      wsusApprovals: mergeWsusApprovals(parsed.wsusApprovals),
-      wsusAutoApproval:
-        parsed.wsusAutoApproval && typeof parsed.wsusAutoApproval === 'object'
-          ? { ...fallback.wsusAutoApproval, ...parsed.wsusAutoApproval }
-          : fallback.wsusAutoApproval,
-      simulation:
-        parsed.simulation && typeof parsed.simulation === 'object'
-          ? {
-              ...createInitialSimulationState(),
-              ...parsed.simulation,
-              installedPatchesByRing: {
-                ...createInitialSimulationState().installedPatchesByRing,
-                ...(parsed.simulation.installedPatchesByRing ?? {}),
-              },
-              incidents: Array.isArray(parsed.simulation.incidents)
-                ? parsed.simulation.incidents
-                : [],
-              eventLogs: Array.isArray(parsed.simulation.eventLogs)
-                ? parsed.simulation.eventLogs
-                : createInitialSimulationState().eventLogs,
-              terminalHistory: Array.isArray(parsed.simulation.terminalHistory)
-                ? parsed.simulation.terminalHistory
-                : [],
-            }
-          : createInitialSimulationState(),
+      ...sanitizeLabState(parsed),
       lastModified: new Date().toISOString(),
     };
     return { ok: true, state: hydrated };
