@@ -66,7 +66,7 @@ export const TopBar: React.FC<TopBarProps> = ({
           >
             {!logoError ? (
               <img
-                src="./assets/aistudio/icono_81a3db5b.png"
+                src="./assets/logo.png"
                 alt="Logo Un Fantasma en el Sistema"
                 referrerPolicy="no-referrer"
                 onError={() => setLogoError(true)}
@@ -86,7 +86,7 @@ export const TopBar: React.FC<TopBarProps> = ({
                 Enterprise Patch &amp; Vulnerability Simulator
               </span>
             </div>
-            <div className="flex items-center gap-2 text-xs text-slate-400">
+            <div className="flex flex-wrap items-center gap-x-2 text-xs text-slate-400">
               <a
                 href="https://www.unfantasmaenelsistema.com/"
                 target="_blank"
@@ -168,7 +168,7 @@ export const TopBar: React.FC<TopBarProps> = ({
         </div>
 
         {/* Scenario Selector & Lab Controls */}
-        <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+        <div className="flex flex-wrap items-center gap-2.5 min-w-0">
           <div className="flex flex-col">
             <label htmlFor="scenario-selector" className="sr-only">
               Selector de Misión o Escenario

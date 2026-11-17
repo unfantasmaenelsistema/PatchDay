@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useEscapeToClose } from '../utils/useEscapeToClose';
 import { BookOpen, Layers, ShieldAlert, Terminal, Wrench, X } from 'lucide-react';
 
 interface SecOpsFieldGuideModalProps {
@@ -14,6 +15,7 @@ export const SecOpsFieldGuideModal: React.FC<SecOpsFieldGuideModalProps> = ({
 }) => {
   const [tab, setTab] = useState<GuideTab>('triage');
 
+  useEscapeToClose(isOpen, onClose);
   if (!isOpen) return null;
 
   return (
