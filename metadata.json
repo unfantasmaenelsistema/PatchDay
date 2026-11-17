@@ -1,0 +1,6 @@
+{
+  "name": "PatchDay — Enterprise Patch & Vulnerability Simulator",
+  "description": "Simulador educativo e interactivo de gestión de parches empresariales, priorización de vulnerabilidades (CVSS, EPSS, CISA KEV), despliegue por anillos WSUS y gestión del cambio ITIL.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
