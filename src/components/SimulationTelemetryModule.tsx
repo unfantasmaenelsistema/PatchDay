@@ -89,8 +89,8 @@ const QUICK_COMMANDS: Array<{
     hint: 'Amplía WinRE +250 MB (0x800f0922)',
   },
   {
-    label: 'Restart-Service IIS/Spooler',
-    command: 'Restart-Service Spooler, W3SVC, MSExchangeTransport',
+    label: 'Restart-Service IIS/Exchange',
+    command: 'Restart-Service W3SVC, MSExchangeTransport',
     hint: 'Restaura servicios detenidos',
   },
 ];
@@ -205,7 +205,7 @@ export const SimulationTelemetryModule: React.FC<
     } else if (fix === 'winrm_winre') {
       setCommandInput('Resize-WinRE');
     } else if (fix === 'winrm_service') {
-      setCommandInput('Restart-Service Spooler, W3SVC, MSExchangeTransport');
+      setCommandInput('Restart-Service W3SVC, MSExchangeTransport');
     } else if (fix === 'winrm_wusa') {
       setCommandInput(`wusa /uninstall /kb:${inc.patchId.replace('KB', '')} /quiet`);
     }
@@ -295,6 +295,7 @@ export const SimulationTelemetryModule: React.FC<
 
             <button
               type="button"
+              title="Ring 0/1 instalan en cualquier ventana; Ring 2 espera al sábado 02:00–06:00 y Ring 3 al domingo 01:00–04:00."
               onClick={() => onAdvanceTime('night_window')}
               className="inline-flex h-9 items-center gap-1.5 rounded-md border border-indigo-500/50 bg-indigo-500/15 px-3.5 text-xs font-semibold text-indigo-200 hover:bg-indigo-500/25 whitespace-nowrap shrink-0 cursor-pointer"
             >

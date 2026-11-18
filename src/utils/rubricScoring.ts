@@ -10,6 +10,7 @@ import {
   computeWsusHygieneMetrics,
   getUnlockedPatchesMap,
 } from './labStorage';
+import { RING01_EVIDENCE_MIN_HOURS } from './cabValidator';
 
 export function evaluateGuidedMissions(
   state: LabState,
@@ -319,7 +320,7 @@ export function computeSecOpsRubric(state: LabState): SecOpsRubric {
 
   let ring01SoakedCount = 0;
   for (const hrs of Object.values(state.simulation.ringSoakHours)) {
-    if (hrs >= 4) ring01SoakedCount += 1;
+    if (hrs >= RING01_EVIDENCE_MIN_HOURS) ring01SoakedCount += 1;
   }
 
   let hygieneScore =

@@ -81,6 +81,53 @@ function upsertIncident(
   return copy;
 }
 
+/**
+ * Ventanas de los anillos de producción. Ring 0/1 son anillos de prueba y
+ * instalan en cualquier ventana; Ring 2/3 solo dentro de la suya.
+ */
+const PROD_RING_WINDOWS: Partial<
+  Record<DeploymentRingId, { day: string; start: number; end: number; label: string }>
+> = {
+  'ring-2': { day: 'Sábado', start: 2, end: 6, label: 'Sábado 02:00–06:00' },
+  'ring-3': { day: 'Domingo', start: 1, end: 4, label: 'Domingo 01:00–04:00' },
+};
+
+function isInsideRingWindow(
+  ringId: DeploymentRingId,
+  clock: { dayName: string; hour: number },
+): boolean {
+  const w = PROD_RING_WINDOWS[ringId];
+  if (!w) return true;
+  return clock.dayName === w.day && clock.hour >= w.start && clock.hour < w.end;
+}
+
+/** Horas (≥ 1) que faltan desde `fromHours` hasta el próximo día/hora indicado. */
+function hoursUntil(fromHours: number, day: string, hour: number): number {
+  for (let d = 1; d <= 24 * DAYS_ES.length; d += 1) {
+    const c = formatSimClock(fromHours + d);
+    if (c.dayName === day && c.hour === hour) return d;
+  }
+  return 24;
+}
+
+/** Anillos de producción con parches aprobados para instalar que aún no se han instalado. */
+function pendingProdRings(state: LabState): DeploymentRingId[] {
+  const pending = new Set<DeploymentRingId>();
+  for (const b of PATCH_BULLETINS) {
+    const app = state.wsusApprovals[b.id];
+    if (!app || app.declinedGlobally) continue;
+    (['ring-2', 'ring-3'] as DeploymentRingId[]).forEach((ringId) => {
+      if (
+        app.rings[ringId]?.action === 'Approved for Install' &&
+        !state.simulation.installedPatchesByRing[ringId].includes(b.id)
+      ) {
+        pending.add(ringId);
+      }
+    });
+  }
+  return [...pending];
+}
+
 function isForcedDeadline(deadline?: string): boolean {
   if (!deadline) return false;
   return (
@@ -111,10 +158,19 @@ export function advanceSimulationTime(
   if (mode === '4h') {
     nextHours += 4;
   } else if (mode === 'night_window') {
-    // Jump to next nocturnal maintenance window (02:00 / Sábado-Domingo cycle)
-    const curHour = (9 + nextHours) % 24;
-    const hoursToTwoAm = curHour < 2 ? 2 - curHour : 24 - curHour + 2;
-    nextHours += Math.max(4, hoursToTwoAm);
+    // Con despliegues pendientes en Ring 2/3, salta a la primera ventana de
+    // esos anillos (Sábado 02:00 / Domingo 01:00). Si no, a la próxima 02:00.
+    const pendingWindows = pendingProdRings(state)
+      .map((ringId) => PROD_RING_WINDOWS[ringId])
+      .filter((w): w is NonNullable<typeof w> => Boolean(w))
+      .map((w) => hoursUntil(nextHours, w.day, w.start));
+    if (pendingWindows.length > 0) {
+      nextHours += Math.min(...pendingWindows);
+    } else {
+      const curHour = (9 + nextHours) % 24;
+      const hoursToTwoAm = curHour < 2 ? 2 - curHour : 24 - curHour + 2;
+      nextHours += Math.max(4, hoursToTwoAm);
+    }
   }
 
   const clock = formatSimClock(nextHours);
@@ -358,12 +414,21 @@ export function advanceSimulationTime(
 
   // 4. Night Window Execution OR ReportNow Agent Telemetry
   if (mode === 'night_window') {
+    const waiting: string[] = [];
     for (const b of PATCH_BULLETINS) {
       const app = nextApprovals[b.id];
       if (!app || app.declinedGlobally) continue;
 
       for (const ring of DEPLOYMENT_RINGS) {
         if (app.rings[ring.id]?.action !== 'Approved for Install') continue;
+
+        // Ring 2/3 solo instalan dentro de su propia ventana de mantenimiento
+        if (!isInsideRingWindow(ring.id, clock)) {
+          if (!nextInstalled[ring.id].includes(b.id)) {
+            waiting.push(`${b.id} → ${ring.shortName} (${PROD_RING_WINDOWS[ring.id]?.label})`);
+          }
+          continue;
+        }
 
         if (!nextInstalled[ring.id].includes(b.id)) {
           nextInstalled[ring.id].push(b.id);
@@ -479,7 +544,7 @@ export function advanceSimulationTime(
             errorCode: 'SERVICE_STOPPED (7036)',
             title: 'Servicios W3SVC (IIS) y MSExchangeTransport detenidos en EXCH-DAG-01',
             detail:
-              'Tras reiniciar EXCH-DAG-01 con KB5035857, los servicios IIS (W3SVC), Spooler y MSExchangeTransport no arrancaron automáticamente. Puede recuperarse con Restart-Service por WinRM.',
+              'Tras reiniciar EXCH-DAG-01 con KB5035857, los servicios IIS (W3SVC) y MSExchangeTransport no arrancaron automáticamente. Puede recuperarse con Restart-Service W3SVC, MSExchangeTransport por WinRM.',
             recommendedFix: 'winrm_service',
             winrmReachable: true,
             status: 'active',
@@ -496,6 +561,16 @@ export function advanceSimulationTime(
           });
         }
       }
+    }
+    if (waiting.length > 0) {
+      logs = appendLog(logs, {
+        simClock: clock.shortClock,
+        source: 'WSUS',
+        severity: 'info',
+        eventId: '10041',
+        host: 'SRV-WSUS-01',
+        message: `Fuera de ventana del anillo: quedan pendientes hasta su ventana ${waiting.join(' · ')}.`,
+      });
     }
   }
 
@@ -868,7 +943,7 @@ export function executeWinRmCommand(
       '  DISM /Online /Cleanup-Image /RestoreHealth  Repara almacén de componentes SxS (error 0x800f081f)',
       '  Reset-WuAgent                               Limpia SoftwareDistribution, proxy WinHTTP y reinicia WUA',
       '  Resize-WinRE                                Amplía partición de recuperación WinRE (+250 MB)',
-      '  Restart-Service Spooler, W3SVC              Reinicia servicios detenidos tras parche',
+      '  Restart-Service W3SVC, MSExchangeTransport  Reinicia servicios detenidos tras parche',
       '  cls / clear                                 Limpia la salida de la consola',
     ];
   } else if (
@@ -1127,38 +1202,84 @@ export function executeWinRmCommand(
       message: `Resize-WinRE completado en ${targetHost}: partición ampliada a 440 MB; 0x800f0922 resuelto.`,
     });
   } else if (lower.includes('restart-service')) {
+    // Servicios que nombra el comando (sin parámetros ni el propio cmdlet)
+    const KNOWN_SERVICES: Record<string, string> = {
+      spooler: 'Print Spooler',
+      w3svc: 'World Wide Web Publishing Service',
+      msexchangetransport: 'Microsoft Exchange Transport',
+      mssqlserver: 'SQL Server (MSSQLSERVER)',
+      wuauserv: 'Windows Update',
+      bits: 'Background Intelligent Transfer Service',
+      cryptsvc: 'Cryptographic Services',
+    };
+    const services = cmd
+      .replace(/restart-service/i, '')
+      .split(/[\s,]+/)
+      .map((t) => t.trim())
+      .filter((t) => t && !t.startsWith('-'));
+    const named = services.map((s) => s.toLowerCase());
+    const hostKey = targetHost.split('.')[0].toLowerCase();
+    const matchesTarget = (inc: SimulationIncident) =>
+      inc.targetHostLabel.toLowerCase().includes(hostKey) ||
+      (targetHost.toLowerCase().startsWith('ring 3') && inc.ringId === 'ring-3') ||
+      (targetHost.toLowerCase().startsWith('ring 2') && inc.ringId === 'ring-2');
+
     let resolved = 0;
+    let failedAgain: SimulationIncident | undefined;
     incidents = incidents.map((inc) => {
-      if (inc.status === 'active' && inc.type === 'service_down') {
-        resolved += 1;
-        return {
-          ...inc,
-          status: 'resolved',
-          resolvedAtClock: clock.shortClock,
-          resolutionMethod: 'Vía 2: WinRM Restart-Service',
-        };
+      if (inc.status !== 'active' || inc.type !== 'service_down' || !matchesTarget(inc)) {
+        return inc;
       }
-      return inc;
+      // La caída de SQL la provoca el parche: reiniciar no basta, hay que revertirlo
+      if (inc.recommendedFix !== 'winrm_service') {
+        if (named.includes('mssqlserver')) failedAgain = inc;
+        return inc;
+      }
+      const needed = ['w3svc', 'msexchangetransport'];
+      if (!needed.every((svc) => named.includes(svc))) return inc;
+      resolved += 1;
+      return {
+        ...inc,
+        status: 'resolved',
+        resolvedAtClock: clock.shortClock,
+        resolutionMethod: 'Vía 2: WinRM Restart-Service',
+      };
     });
-    output = [
-      `[${targetHost}] Restart-Service -Name Spooler, W3SVC, MSExchangeTransport -Force`,
-      `Status   Name                 DisplayName`,
-      `------   ----                 -----------`,
-      `Running  Spooler              Print Spooler`,
-      `Running  W3SVC                World Wide Web Publishing Service`,
-      `Running  MSExchangeTransport  Microsoft Exchange Transport`,
-      resolved > 0
-        ? `ÉXITO: Servicios críticos restaurados en ${targetHost}.`
-        : `Servicios reiniciados en ${targetHost}.`,
-    ];
-    logs = appendLog(logs, {
-      simClock: clock.shortClock,
-      source: 'WinRM',
-      severity: 'success',
-      eventId: '7036',
-      host: targetHost,
-      message: `Servicios Spooler / W3SVC / MSExchangeTransport reiniciados correctamente en ${targetHost}.`,
-    });
+
+    if (services.length === 0) {
+      isError = true;
+      output = [
+        `Restart-Service : falta el parámetro -Name. Ejemplo: Restart-Service W3SVC, MSExchangeTransport`,
+      ];
+    } else if (failedAgain) {
+      isError = true;
+      output = [
+        `[${targetHost}] Restart-Service -Name ${services.join(', ')} -Force`,
+        `ADVERTENCIA: El servicio MSSQLSERVER se inició y volvió a terminar de forma inesperada (7031).`,
+        `La causa es ${failedAgain.patchId}: reiniciar no basta. Bloquea la promoción y revierte el parche (wusa /uninstall o Approved for Removal).`,
+      ];
+    } else {
+      output = [
+        `[${targetHost}] Restart-Service -Name ${services.join(', ')} -Force`,
+        `Status   Name                 DisplayName`,
+        `------   ----                 -----------`,
+        ...services.map(
+          (s) =>
+            `Running  ${s.padEnd(20)} ${KNOWN_SERVICES[s.toLowerCase()] ?? s}`,
+        ),
+        resolved > 0
+          ? `ÉXITO: Servicios críticos restaurados en ${targetHost}.`
+          : `Servicios reiniciados en ${targetHost}; ningún incidente activo de este equipo depende de ellos.`,
+      ];
+      logs = appendLog(logs, {
+        simClock: clock.shortClock,
+        source: 'WinRM',
+        severity: 'success',
+        eventId: '7036',
+        host: targetHost,
+        message: `Servicios ${services.join(' / ')} reiniciados correctamente en ${targetHost}.`,
+      });
+    }
   } else if (lower.includes('windowsupdate.log')) {
     const wuaLogs = sim.eventLogs
       .filter(
@@ -1492,7 +1613,7 @@ export function activateMissionScenario(
         errorCode: '0x8024402c / 0x800f081f',
         title: 'Doble fallo WUA 0x8024402c + 0x800f081f en EXCH-DAG-01',
         detail:
-          'WindowsUpdate.log: caché SoftwareDistribution corrupta (0x8024402c) y componentes WinSxS dañados (0x800f081f). Ejecuta Reset-WuAgent y DISM /RestoreHealth.',
+          'WindowsUpdate.log: el agente no resuelve SRV-WSUS-01 por un proxy WinHTTP residual (0x8024402c, WU_E_PT_WINHTTP_NAME_NOT_RESOLVED) y el almacén WinSxS está dañado (0x800f081f). Ejecuta Reset-WuAgent (incluye netsh winhttp reset proxy) y DISM /RestoreHealth.',
         recommendedFix: 'winrm_dism_restore',
         winrmReachable: true,
         status: 'active',
