@@ -94,7 +94,7 @@ export const DEPLOYMENT_RINGS: DeploymentRing[] = [
     description:
       'Controladores de Dominio Active Directory, clúster Exchange DAG, SQL ERP y firewalls perimetrales de alta disponibilidad.',
     fleetCount: 5,
-    fleetComposition: '2 Domain Controllers, 2 SQL Server en clúster, 1 Gateway ERP',
+    fleetComposition: '2 Domain Controllers, 1 Exchange DAG, 1 SQL ERP y 1 firewall perimetral (HA)',
     maintenanceWindow: 'Domingo · 01:00 – 04:00 (Ventana estricta + Snapshot)',
     autoApproveDelay: 'Solo aprobación explícita CAB + RFC',
     requiresCab: true,
@@ -1035,9 +1035,9 @@ export const SCENARIOS: ScenarioDefinition[] = [
   {
     id: 'patch-tuesday',
     name: 'Escenario 01: Martes de Parches Crítico',
-    subtitle: 'Triage integral de 14 boletines corporativos (Windows, Linux y Perímetro)',
+    subtitle: 'Triage integral de 17 boletines corporativos (Windows, Linux y Perímetro)',
     briefing:
-      'Es martes por la mañana y el catálogo WSUS ha sincronizado 14 boletines nuevos. Tu objetivo es clasificar por riesgo real (CVSS + EPSS + KEV), descartar parches reemplazados y encolar los prioritarios hacia RFC.',
+      'Es martes por la mañana y el catálogo WSUS ha sincronizado 17 boletines nuevos. Tu objetivo es clasificar por riesgo real (CVSS + EPSS + KEV), descartar parches reemplazados y encolar los prioritarios hacia RFC.',
     targetSlaPct: 85,
     focusFilter: 'all',
   },

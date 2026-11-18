@@ -11,6 +11,16 @@ import {
   RfcSubmission,
 } from '../types/patchday';
 
+/** Horas mínimas en Ring 0/1 para que un boletín cuente como probado. */
+export const RING01_EVIDENCE_MIN_HOURS = 4;
+
+export function hasRing01Evidence(
+  ringSoakHours: Record<string, number>,
+  patchId: string,
+): boolean {
+  return (ringSoakHours[patchId] ?? 0) >= RING01_EVIDENCE_MIN_HOURS;
+}
+
 export function evaluateCabSubmission(
   input: RfcFormInput,
   blackoutPeriods: BlackoutPeriod[],
@@ -220,6 +230,9 @@ export function evaluateCabSubmission(
   }
 
   // 6. Testing Plan validation
+  const withoutEvidence = input.validatedPatchIds
+    ? selectedBulletins.filter((b) => !input.validatedPatchIds!.includes(b.id))
+    : [];
   if (input.changeType === 'Normal' && targetsProd && !input.ring01Tested) {
     findings.push({
       ruleId: 'CAB-TEST-06',
@@ -229,6 +242,16 @@ export function evaluateCabSubmission(
       detail:
         'Los cambios Normales dirigidos a Producción (Anillo 2/3) exigen confirmar validación previa en el laboratorio Canary y grupo Piloto (Anillo 0/1).',
     });
+  } else if (input.changeType === 'Normal' && targetsProd && withoutEvidence.length > 0) {
+    findings.push({
+      ruleId: 'CAB-TEST-06',
+      passed: false,
+      severity: 'error',
+      title: 'Pruebas declaradas sin evidencia en Anillo 0 / Anillo 1',
+      detail: `${withoutEvidence
+        .map((b) => b.id)
+        .join(', ')} no consta como probado: apruébalo para instalar en Ring 0 o Ring 1 en la consola WSUS (no exige RFC) y deja correr al menos ${RING01_EVIDENCE_MIN_HOURS} h de reloj antes de pedir el cambio a Producción.`,
+    });
   } else {
     findings.push({
       ruleId: 'CAB-TEST-06',
@@ -236,7 +259,11 @@ export function evaluateCabSubmission(
       severity: 'pass',
       title: 'Plan de pruebas validado',
       detail: input.ring01Tested
-        ? 'Validación confirmada en Anillo 0 / Anillo 1.'
+        ? input.validatedPatchIds
+          ? `Evidencia: ${selectedBulletins
+              .map((b) => b.id)
+              .join(', ')} con al menos ${RING01_EVIDENCE_MIN_HOURS} h en Anillo 0 / Anillo 1.`
+          : 'Validación confirmada en Anillo 0 / Anillo 1.'
         : 'Cambio de emergencia o temprano con seguimiento inmediato en Canary.',
     });
   }

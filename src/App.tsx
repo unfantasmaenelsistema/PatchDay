@@ -413,6 +413,7 @@ export default function App() {
               decisions={labState.triageDecisions}
               blackoutPeriods={labState.blackoutPeriods}
               rfcSubmissions={labState.rfcSubmissions}
+              ringSoakHours={labState.simulation.ringSoakHours}
               unlockedMap={unlockedMap}
               onSubmitRfc={handleSubmitRfc}
               onJumpToTriage={handleJumpToPatchInTriage}

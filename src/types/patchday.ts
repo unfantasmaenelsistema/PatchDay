@@ -136,6 +136,11 @@ export interface RfcFormInput {
   affectedServices: string[];
   estimatedDowntimeMin: number;
   ring01Tested: boolean;
+  /**
+   * Boletines con evidencia real de pruebas en Ring 0/1 al enviar el RFC.
+   * Ausente en RFC guardados por versiones anteriores (se respeta la casilla).
+   */
+  validatedPatchIds?: string[];
   testingNotes: string;
   rollbackStrategy: RollbackStrategy;
   rollbackThreshold: string;

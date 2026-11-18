@@ -70,7 +70,7 @@ Réplica funcional de la consola clásica MMC de Microsoft WSUS: árbol de nodos
 ---
 
 ### 4. Motor de Simulación Temporal, Telemetría de Errores y Rollback en 3 Vías
-Avanza el reloj simulado (`+4 Horas`, `Ventana Nocturna`, `wuauclt /reportnow`) o dispara un simulacro de regresión real para detectar bucles BSOD (`KB5036893` sin 24h de soak en Ring 0/1), caídas de Kerberos/IIS (`KB5034763` / `KB5035857`) y errores WUA (`0x800f0922`, `0x8024402c`, `0x800f081f`, `0x80070005`), remediando por:
+Avanza el reloj simulado (`+4 Horas`, `Ventana Nocturna` —Ring 0/1 instalan en cualquier ventana; Ring 2 espera al sábado 02:00–06:00 y Ring 3 al domingo 01:00–04:00—, `wuauclt /reportnow`) o dispara un simulacro de regresión real para detectar bucles BSOD (`KB5036893` sin 24h de soak en Ring 0/1), caídas de Kerberos/IIS (`KB5034763` / `KB5035857`) y errores WUA (`0x800f0922`, `0x8024402c`, `0x800f081f`, `0x80070005`), remediando por:
 1. **Vía 1:** `Approved for Removal` en WSUS.
 2. **Vía 2:** Terminal PowerShell / WinRM (`DISM`, `wusa /uninstall`, `Reset-WuAgent`).
 3. **Vía 3:** Restauración de Snapshot en Hipervisor (VMware vCenter / Proxmox).
@@ -85,7 +85,7 @@ Evaluación continua sobre **100 puntos** dividida en 4 KPIs de 25 puntos cada u
 | Misión | Reto Operativo | Enfoque Técnico |
 | :--- | :--- | :--- |
 | **Misión 01** | *El Espejismo del CVSS 9.8* | Priorizar CISA KEV + EPSS > 85%, descartar CVSS 9.8 teórico y declinar `Superseded` |
-| **Misión 02** | *Gobernanza CAB y Ventana Nocturna* | RFC aprobado por el CAB para Exchange/IIS en Ring 3 con la ventana nocturna del domingo, sin interrumpir horario laboral |
+| **Misión 02** | *Gobernanza CAB y Ventana Nocturna* | RFC aprobado por el CAB para Exchange/IIS en Ring 3 (con KB5035857 probado antes al menos 4 h en Ring 0/1) y la ventana nocturna del domingo, sin interrumpir horario laboral |
 | **Misión 03** | *Pánico en el Anillo Piloto (Rollback Táctico)* | Frenar regresión en `DEV-SQL-01` (Ring 1) antes de Ring 2 mediante `wusa` / Removal |
 | **Misión 04** | *Caos en el Agente Windows Update* | Diagnosticar `0x8024402c` y `0x800f081f` en `WindowsUpdate.log` y reparar 3 servidores Ring 3 |
 

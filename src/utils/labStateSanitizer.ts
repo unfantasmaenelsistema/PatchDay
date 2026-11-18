@@ -106,6 +106,9 @@ function sanitizeRfcInput(raw: unknown): RfcFormInput | null {
     affectedServices: strArray(raw.affectedServices),
     estimatedDowntimeMin: num(raw.estimatedDowntimeMin),
     ring01Tested: bool(raw.ring01Tested),
+    ...(Array.isArray(raw.validatedPatchIds)
+      ? { validatedPatchIds: strArray(raw.validatedPatchIds).filter((id) => PATCH_IDS.includes(id)) }
+      : {}),
     testingNotes: str(raw.testingNotes),
     rollbackStrategy: oneOf(raw.rollbackStrategy, ROLLBACK_IDS, 'none'),
     rollbackThreshold: str(raw.rollbackThreshold),

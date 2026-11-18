@@ -31,13 +31,18 @@ import {
   RollbackStrategy,
   TriageDecision,
 } from '../types/patchday';
-import { evaluateCabSubmission } from '../utils/cabValidator';
+import {
+  evaluateCabSubmission,
+  hasRing01Evidence,
+  RING01_EVIDENCE_MIN_HOURS,
+} from '../utils/cabValidator';
 import { UnlockedPatchApproval } from '../utils/labStorage';
 
 interface RfcCabModuleProps {
   decisions: Record<string, TriageDecision>;
   blackoutPeriods: BlackoutPeriod[];
   rfcSubmissions: RfcSubmission[];
+  ringSoakHours: Record<string, number>;
   unlockedMap: Map<string, UnlockedPatchApproval>;
   onSubmitRfc: (submission: RfcSubmission) => void;
   onJumpToTriage: (patchId: string) => void;
@@ -55,6 +60,7 @@ export const RfcCabModule: React.FC<RfcCabModuleProps> = ({
   decisions,
   blackoutPeriods,
   rfcSubmissions,
+  ringSoakHours,
   unlockedMap,
   onSubmitRfc,
   onJumpToTriage,
@@ -86,10 +92,8 @@ export const RfcCabModule: React.FC<RfcCabModuleProps> = ({
     'Ninguno (Estaciones de usuario)',
   ]);
   const [estimatedDowntimeMin, setEstimatedDowntimeMin] = useState<number>(10);
-  const [ring01Tested, setRing01Tested] = useState<boolean>(true);
-  const [testingNotes, setTestingNotes] = useState(
-    'Validado en LAB-WIN11-01 (Anillo 0) y grupo Piloto IT (Anillo 1) sin regresiones de arranque ni errores en visor de eventos.',
-  );
+  const [ring01Tested, setRing01Tested] = useState<boolean>(false);
+  const [testingNotes, setTestingNotes] = useState('');
   const [rollbackStrategy, setRollbackStrategy] =
     useState<RollbackStrategy>('hypervisor-snapshot');
   const [rollbackThreshold, setRollbackThreshold] = useState<string>(
@@ -158,6 +162,9 @@ export const RfcCabModule: React.FC<RfcCabModuleProps> = ({
       affectedServices,
       estimatedDowntimeMin,
       ring01Tested,
+      validatedPatchIds: selectedPatchIds.filter((id) =>
+        hasRing01Evidence(ringSoakHours, id),
+      ),
       testingNotes: testingNotes.trim(),
       rollbackStrategy,
       rollbackThreshold: rollbackThreshold.trim(),
@@ -561,6 +568,22 @@ export const RfcCabModule: React.FC<RfcCabModuleProps> = ({
                   Confirmo que los boletines han superado validación previa en Anillo 0 (Sandbox) y Anillo 1 (Piloto IT) sin errores críticos.
                 </span>
               </label>
+              {selectedPatchIds.length > 0 && (
+                <ul className="space-y-1 text-[11px]" aria-label="Evidencia de pruebas en Anillo 0 / Anillo 1">
+                  {selectedPatchIds.map((id) => {
+                    const hrs = ringSoakHours[id] ?? 0;
+                    const ok = hasRing01Evidence(ringSoakHours, id);
+                    return (
+                      <li key={id} className={ok ? 'text-emerald-300' : 'text-amber-300'}>
+                        {ok ? '✔' : '✖'} <span className="font-mono">{id}</span>:{' '}
+                        {ok
+                          ? `${hrs} h en Anillo 0/1 sin bloqueo`
+                          : `${hrs} h en Anillo 0/1 (mínimo ${RING01_EVIDENCE_MIN_HOURS} h: apruébalo en Ring 0/1 en WSUS y avanza el reloj)`}
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
               <input
                 type="text"
                 value={testingNotes}
